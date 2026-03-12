@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Blood Pressure Tracker</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -304,9 +305,124 @@
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: var(--bg); }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Auth Screen ── */
+    #auth-screen { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 10000; }
+    #auth-screen.hidden { display: none; }
+    .auth-container { max-width: 360px; width: 90%; }
+    .auth-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+    }
+    .auth-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 32px; justify-content: center;
+    }
+    .auth-header svg { width: 28px; height: 28px; color: var(--accent); }
+    .auth-header h1 { font-size: 1.25rem; font-weight: 700; }
+    .auth-tabs {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 24px;
+    }
+    .auth-tab-btn {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted);
+      padding: 10px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.9rem;
+      transition: all 0.15s;
+    }
+    .auth-tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .auth-form { display: none; }
+    .auth-form.active { display: block; }
+    .auth-form .field { margin-bottom: 14px; }
+    .auth-form .field label { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; display: block; font-weight: 500; }
+    .auth-form .field input {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 11px 14px; font-size: 1rem; outline: none;
+    }
+    .auth-form .field input:focus { border-color: var(--accent); }
+    .auth-form .field .hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; }
+    .auth-form .btn { width: 100%; margin-top: 20px; }
+    .auth-error { color: var(--stage2); font-size: 0.85rem; margin-bottom: 16px; padding: 10px 12px; background: rgba(239,68,68,0.1); border: 1px solid var(--stage2); border-radius: 6px; display: none; }
+    .auth-error.show { display: block; }
+
+    /* ── User Menu ── */
+    .user-menu-wrapper { position: relative; }
+    .user-btn {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 8px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+      font-size: 0.9rem; transition: border-color 0.15s;
+    }
+    .user-btn:hover { border-color: var(--accent); }
+    .user-dropdown {
+      position: absolute; top: 100%; right: 0; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; margin-top: 8px; min-width: 200px; box-shadow: var(--shadow); display: none; z-index: 1000;
+    }
+    .user-dropdown.open { display: block; }
+    .user-dropdown-item {
+      padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer;
+      transition: background 0.1s; font-size: 0.9rem; display: flex; align-items: center; gap: 8px;
+    }
+    .user-dropdown-item:last-child { border-bottom: none; }
+    .user-dropdown-item:hover { background: var(--surface2); }
+    .user-dropdown-item.current { color: var(--accent); font-weight: 600; }
+    .user-dropdown-item.logout { color: var(--stage2); }
   </style>
 </head>
 <body>
+
+<!-- ── Auth Screen ── -->
+<div id="auth-screen">
+  <div class="auth-container">
+    <div class="auth-card">
+      <div class="auth-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+        </svg>
+        <h1>BP Tracker</h1>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab-btn active" data-tab="login">Login</button>
+        <button class="auth-tab-btn" data-tab="register">Sign Up</button>
+      </div>
+
+      <div id="login-form" class="auth-form active">
+        <div class="auth-error" id="login-error"></div>
+        <div class="field">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" placeholder="you@example.com" />
+        </div>
+        <div class="field">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" />
+        </div>
+        <button class="btn btn-primary" id="login-btn" style="width:100%">Log In</button>
+      </div>
+
+      <div id="register-form" class="auth-form">
+        <div class="auth-error" id="register-error"></div>
+        <div class="field">
+          <label for="register-name">Full Name</label>
+          <input type="text" id="register-name" placeholder="John Smith" />
+        </div>
+        <div class="field">
+          <label for="register-email">Email</label>
+          <input type="email" id="register-email" placeholder="you@example.com" />
+        </div>
+        <div class="field">
+          <label for="register-password">Password</label>
+          <input type="password" id="register-password" placeholder="••••••••" />
+          <span class="hint">At least 6 characters</span>
+        </div>
+        <button class="btn btn-primary" id="register-btn" style="width:100%">Create Account</button>
+      </div>
+
+      <div style="text-align:center;margin-top:20px;font-size:0.8rem;color:var(--text-muted)">
+        All data stays private. No cloud sync.
+      </div>
+    </div>
+  </div>
+</div>
 
 <header>
   <div class="logo">
@@ -315,12 +431,27 @@
     </svg>
     <span>BP Tracker</span>
   </div>
-  <nav>
-    <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
-    <button class="tab-btn" data-tab="add">+ Add</button>
-    <button class="tab-btn" data-tab="history">History</button>
-    <button class="tab-btn" data-tab="reminders">Reminders</button>
-  </nav>
+  <div style="display:flex;align-items:center;gap:16px">
+    <nav>
+      <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+      <button class="tab-btn" data-tab="add">+ Add</button>
+      <button class="tab-btn" data-tab="history">History</button>
+      <button class="tab-btn" data-tab="reminders">Reminders</button>
+    </nav>
+    <div class="user-menu-wrapper">
+      <button class="user-btn" id="user-btn">
+        <span id="user-display-name">User</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </button>
+      <div class="user-dropdown" id="user-dropdown">
+        <div id="user-list"></div>
+        <div class="user-dropdown-item logout" id="logout-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          Log Out
+        </div>
+      </div>
+    </div>
+  </div>
 </header>
 
 <main>
@@ -554,20 +685,238 @@
 
 <script>
 /* ─────────────────────────────────────────────
-   STATE & STORAGE
+   MULTI-USER SYSTEM
 ───────────────────────────────────────────── */
-const READINGS_KEY  = 'bp_readings_v1';
-const REMINDERS_KEY = 'bp_reminders_v1';
-const SETTINGS_KEY  = 'bp_settings_v1';
+const USERS_KEY     = 'bp_users_v1';
+const SESSION_KEY   = 'bp_session_v1';
+const READINGS_KEY  = 'bp_readings_';    // per-user suffix
+const REMINDERS_KEY = 'bp_reminders_';   // per-user suffix
+const SETTINGS_KEY  = 'bp_settings_';    // per-user suffix
 
-function loadReadings()  { try { return JSON.parse(localStorage.getItem(READINGS_KEY)) || []; } catch { return []; } }
-function saveReadings(r) { localStorage.setItem(READINGS_KEY, JSON.stringify(r)); }
+let currentUser = null;
 
-function loadReminders()  { try { return JSON.parse(localStorage.getItem(REMINDERS_KEY)) || []; } catch { return []; } }
-function saveReminders(r) { localStorage.setItem(REMINDERS_KEY, JSON.stringify(r)); }
+// Load/save users database
+function loadUsers()  { try { return JSON.parse(localStorage.getItem(USERS_KEY)) || []; } catch { return []; } }
+function saveUsers(u) { localStorage.setItem(USERS_KEY, JSON.stringify(u)); }
 
-function loadSettings()  { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch { return {}; } }
-function saveSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
+// Session management
+function getSession() { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; } }
+function setSession(user) { localStorage.setItem(SESSION_KEY, JSON.stringify(user)); currentUser = user; }
+function clearSession() { localStorage.removeItem(SESSION_KEY); currentUser = null; }
+
+// User-scoped storage keys
+function userReadingsKey(userId)  { return READINGS_KEY + userId; }
+function userRemindersKey(userId) { return REMINDERS_KEY + userId; }
+function userSettingsKey(userId)  { return SETTINGS_KEY + userId; }
+
+// Hash password with simple method (CryptoJS available)
+function hashPassword(pwd) {
+  return CryptoJS.SHA256(pwd).toString();
+}
+
+// Auth functions
+function register(name, email, password) {
+  const users = loadUsers();
+  if (users.some(u => u.email === email)) return { ok: false, error: 'Email already registered' };
+  if (password.length < 6) return { ok: false, error: 'Password must be at least 6 characters' };
+  
+  const user = {
+    id: crypto.randomUUID(),
+    name,
+    email,
+    passwordHash: hashPassword(password),
+    created: new Date().toISOString(),
+  };
+  users.push(user);
+  saveUsers(users);
+  return { ok: true, user };
+}
+
+function login(email, password) {
+  const users = loadUsers();
+  const user = users.find(u => u.email === email);
+  if (!user) return { ok: false, error: 'Email not found' };
+  if (user.passwordHash !== hashPassword(password)) return { ok: false, error: 'Incorrect password' };
+  
+  setSession(user);
+  return { ok: true, user };
+}
+
+function logout() {
+  clearSession();
+}
+
+// Load per-user data
+function loadReadings()  { 
+  if (!currentUser) return [];
+  try { return JSON.parse(localStorage.getItem(userReadingsKey(currentUser.id))) || []; } catch { return []; } 
+}
+function saveReadings(r) { 
+  if (!currentUser) return;
+  localStorage.setItem(userReadingsKey(currentUser.id), JSON.stringify(r)); 
+}
+
+function loadReminders()  { 
+  if (!currentUser) return [];
+  try { return JSON.parse(localStorage.getItem(userRemindersKey(currentUser.id))) || []; } catch { return []; } 
+}
+function saveReminders(r) { 
+  if (!currentUser) return;
+  localStorage.setItem(userRemindersKey(currentUser.id), JSON.stringify(r)); 
+}
+
+function loadSettings()  { 
+  if (!currentUser) return {};
+  try { return JSON.parse(localStorage.getItem(userSettingsKey(currentUser.id))) || {}; } catch { return {}; } 
+}
+function saveSettings(s) { 
+  if (!currentUser) return;
+  localStorage.setItem(userSettingsKey(currentUser.id), JSON.stringify(s)); 
+}
+
+/* ─────────────────────────────────────────────
+   AUTH UI
+───────────────────────────────────────────── */
+function showAuthScreen() {
+  document.getElementById('auth-screen').classList.remove('hidden');
+  document.querySelector('header').style.display = 'none';
+  document.querySelector('main').style.display = 'none';
+}
+
+function hideAuthScreen() {
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.querySelector('header').style.display = 'flex';
+  document.querySelector('main').style.display = 'block';
+}
+
+function showError(formId, msg) {
+  const errorEl = document.getElementById(formId + '-error');
+  errorEl.textContent = msg;
+  errorEl.classList.add('show');
+  setTimeout(() => errorEl.classList.remove('show'), 4000);
+}
+
+// Auth tab switching
+document.querySelectorAll('.auth-tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.auth-tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(tab + '-form').classList.add('active');
+    document.getElementById((tab === 'login' ? 'register' : 'login') + '-error').classList.remove('show');
+  });
+});
+
+// Login
+document.getElementById('login-btn').addEventListener('click', () => {
+  const email = document.getElementById('login-email').value.trim();
+  const pwd   = document.getElementById('login-password').value;
+  
+  if (!email || !pwd) { showError('login', 'Please fill all fields'); return; }
+  
+  const result = login(email, pwd);
+  if (!result.ok) { showError('login', result.error); return; }
+  
+  updateUserDisplay();
+  buildUserList();
+  hideAuthScreen();
+  renderDashboard();
+  toast(`Welcome back, ${result.user.name}!`, 'success');
+});
+
+// Register
+document.getElementById('register-btn').addEventListener('click', () => {
+  const name = document.getElementById('register-name').value.trim();
+  const email = document.getElementById('register-email').value.trim();
+  const pwd   = document.getElementById('register-password').value;
+  
+  if (!name || !email || !pwd) { showError('register', 'Please fill all fields'); return; }
+  
+  const result = register(name, email, pwd);
+  if (!result.ok) { showError('register', result.error); return; }
+  
+  setSession(result.user);
+  updateUserDisplay();
+  buildUserList();
+  hideAuthScreen();
+  renderDashboard();
+  toast(`Welcome, ${result.user.name}!`, 'success');
+  
+  document.getElementById('register-email').value = '';
+  document.getElementById('register-password').value = '';
+  document.getElementById('register-name').value = '';
+});
+
+// User menu
+document.getElementById('user-btn').addEventListener('click', e => {
+  e.stopPropagation();
+  document.getElementById('user-dropdown').classList.toggle('open');
+});
+
+document.addEventListener('click', e => {
+  if (!document.querySelector('.user-menu-wrapper').contains(e.target)) {
+    document.getElementById('user-dropdown').classList.remove('open');
+  }
+});
+
+document.getElementById('logout-btn').addEventListener('click', () => {
+  if (confirm('Log out?')) {
+    logout();
+    document.getElementById('user-dropdown').classList.remove('open');
+    showAuthScreen();
+    document.getElementById('login-email').value = '';
+    document.getElementById('login-password').value = '';
+  }
+});
+
+function updateUserDisplay() {
+  if (currentUser) {
+    document.getElementById('user-display-name').textContent = currentUser.name;
+  }
+}
+
+function buildUserList() {
+  const users = loadUsers();
+  const list = document.getElementById('user-list');
+  list.innerHTML = users.map((u, i) => `
+    <div class="user-dropdown-item ${u.id === currentUser.id ? 'current' : ''}" data-user-id="${u.id}">
+      ${u.name}${u.id === currentUser.id ? ' ✓' : ''}
+    </div>
+  `).join('');
+  
+  list.querySelectorAll('.user-dropdown-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const userId = item.dataset.userId;
+      if (userId === currentUser.id) return;
+      
+      const user = users.find(u => u.id === userId);
+      if (user) {
+        setSession(user);
+        updateUserDisplay();
+        buildUserList();
+        document.getElementById('user-dropdown').classList.remove('open');
+        renderDashboard();
+        toast(`Switched to ${user.name}`, 'success');
+      }
+    });
+  });
+}
+
+/* ─────────────────────────────────────────────
+   INITIALIZATION
+───────────────────────────────────────────── */
+function initAuth() {
+  const session = getSession();
+  if (session) {
+    currentUser = session;
+    updateUserDisplay();
+    buildUserList();
+    hideAuthScreen();
+  } else {
+    showAuthScreen();
+  }
+}
 
 /* ─────────────────────────────────────────────
    BP CLASSIFICATION
@@ -744,7 +1093,6 @@ function renderDashboard() {
   document.getElementById('stat-status').innerHTML  = `<span class="bp-badge ${cat.cls}">${cat.label}</span>`;
   document.getElementById('last-reading-time').textContent = 'Last: ' + formatFull(latest.ts);
 
-  // 7-day average
   const cutoff = Date.now() - 7 * 86400000;
   const recent = readings.filter(r => new Date(r.ts).getTime() >= cutoff);
   if (recent.length) {
@@ -761,7 +1109,6 @@ function renderDashboard() {
 /* ─────────────────────────────────────────────
    ADD READING FORM
 ───────────────────────────────────────────── */
-// Set default datetime to now
 function setDefaultDatetime() {
   const now = new Date();
   const offset = now.getTimezoneOffset() * 60000;
@@ -770,7 +1117,6 @@ function setDefaultDatetime() {
 }
 setDefaultDatetime();
 
-// Live category preview
 ['f-sys','f-dia'].forEach(id => {
   document.getElementById(id).addEventListener('input', updateLiveCategory);
 });
@@ -813,7 +1159,6 @@ document.getElementById('reading-form').addEventListener('submit', e => {
   const cat = classify(sys, dia);
   toast(`Reading saved — ${cat.label}`, 'success');
 
-  // Reset form
   document.getElementById('f-sys').value   = '';
   document.getElementById('f-dia').value   = '';
   document.getElementById('f-pulse').value = '';
@@ -821,7 +1166,6 @@ document.getElementById('reading-form').addEventListener('submit', e => {
   document.getElementById('live-category').innerHTML = '';
   setDefaultDatetime();
 
-  // Warn if crisis
   if (cat.label === 'Crisis') {
     setTimeout(() => alert('⚠️ Hypertensive Crisis detected!\nSystolic > 180 or Diastolic > 120.\nSeek immediate medical attention if you feel symptoms.'), 100);
   }
@@ -845,13 +1189,11 @@ function renderHistory() {
   if (categoryFilter !== 'all') {
     filtered = filtered.filter(r => {
       const cat = classify(r.sys, r.dia).label.toLowerCase().replace(' ', '');
-      // map label to filter key
       const map = { 'normal':'normal', 'elevated':'elevated', 'highstage1':'stage1', 'highstage2':'stage2', 'crisis':'crisis' };
       return map[cat] === categoryFilter;
     });
   }
 
-  // Sort newest first
   filtered.sort((a, b) => new Date(b.ts) - new Date(a.ts));
 
   const tbody = document.getElementById('readings-tbody');
@@ -914,7 +1256,7 @@ document.getElementById('export-csv-btn').addEventListener('click', () => {
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `bp-readings-${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `bp-readings-${currentUser.name}-${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
   toast('CSV exported', 'success');
@@ -997,7 +1339,6 @@ document.getElementById('add-reminder-btn').addEventListener('click', () => {
   document.getElementById('r-label').value = '';
 });
 
-/* Notification permission */
 function updateNotifStatus() {
   const el  = document.getElementById('notif-status');
   const btn = document.getElementById('req-notif-btn');
@@ -1030,17 +1371,19 @@ document.getElementById('req-notif-btn').addEventListener('click', () => {
   });
 });
 
-/* Sound toggle */
-const settings = loadSettings();
 const soundToggle = document.getElementById('sound-toggle');
-soundToggle.checked = !!settings.sound;
+document.addEventListener('DOMContentLoaded', () => {
+  if (currentUser) {
+    const settings = loadSettings();
+    soundToggle.checked = !!settings.sound;
+  }
+});
 soundToggle.addEventListener('change', () => {
   const s = loadSettings(); s.sound = soundToggle.checked; saveSettings(s);
 });
 
-/* Reminder scheduler — checks every 30s */
 let reminderIntervalId = null;
-let lastFiredKey = {};  // prevent double-fire within same minute
+let lastFiredKey = {};
 
 function scheduleReminders() {
   if (reminderIntervalId) clearInterval(reminderIntervalId);
@@ -1118,8 +1461,11 @@ function escapeHtml(str) {
 /* ─────────────────────────────────────────────
    INIT
 ───────────────────────────────────────────── */
-renderDashboard();
-scheduleReminders();
+initAuth();
+if (currentUser) {
+  renderDashboard();
+  scheduleReminders();
+}
 </script>
 </body>
 </html>
