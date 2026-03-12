@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Blood Pressure Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3348;
+      --accent: #4f8ef7;
+      --accent-hover: #6ba3ff;
+      --text: #e8eaf0;
+      --text-muted: #7a88aa;
+      --normal: #22c55e;
+      --elevated: #f59e0b;
+      --stage1: #f97316;
+      --stage2: #ef4444;
+      --crisis: #dc2626;
+      --radius: 12px;
+      --shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.15rem; }
+    .logo svg { color: var(--accent); }
+
+    /* ── Nav Tabs ── */
+    nav { display: flex; gap: 4px; }
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: background 0.15s, color 0.15s;
+    }
+    .tab-btn:hover { background: var(--surface2); color: var(--text); }
+    .tab-btn.active { background: var(--accent); color: #fff; }
+
+    /* ── Main ── */
+    main { flex: 1; padding: 28px 24px; max-width: 1100px; margin: 0 auto; width: 100%; }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Stats Cards ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .stat-card .label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .stat-card .value { font-size: 1.8rem; font-weight: 700; line-height: 1; }
+    .stat-card .sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 6px; }
+
+    /* ── Chart card ── */
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 28px;
+    }
+    .chart-card h3 { font-size: 1rem; margin-bottom: 18px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .chart-wrap { position: relative; height: 260px; }
+
+    /* ── Section header ── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    .section-header h2 { font-size: 1.25rem; font-weight: 700; }
+
+    /* ── Form ── */
+    .form-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      max-width: 500px;
+    }
+    .form-card h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: 24px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+    .field label { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
+    .field input, .field textarea, .field select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 11px 14px;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.15s;
+      font-family: inherit;
+    }
+    .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--accent); }
+    .field .hint { font-size: 0.75rem; color: var(--text-muted); }
+    .field textarea { resize: vertical; min-height: 70px; }
+
+    /* ── BP Category pill inside form ── */
+    #live-category { margin-bottom: 18px; min-height: 28px; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-danger { background: transparent; color: var(--stage2); border: 1px solid var(--stage2); }
+    .btn-danger:hover { background: var(--stage2); color: #fff; }
+    .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+
+    /* ── BP Badge ── */
+    .bp-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 99px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .bp-normal    { background: rgba(34,197,94,0.15);  color: var(--normal); }
+    .bp-elevated  { background: rgba(245,158,11,0.15); color: var(--elevated); }
+    .bp-stage1    { background: rgba(249,115,22,0.15); color: var(--stage1); }
+    .bp-stage2    { background: rgba(239,68,68,0.15);  color: var(--stage2); }
+    .bp-crisis    { background: rgba(220,38,38,0.25);  color: #fca5a5; }
+
+    /* ── Readings Table ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    thead th {
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:hover { background: var(--surface2); }
+    tbody td { padding: 12px 14px; vertical-align: middle; }
+    tbody td .note { color: var(--text-muted); font-size: 0.8rem; margin-top: 2px; }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+    }
+    .empty-state svg { margin-bottom: 16px; opacity: 0.4; }
+    .empty-state p { font-size: 1rem; margin-bottom: 8px; font-weight: 500; }
+    .empty-state span { font-size: 0.85rem; }
+
+    /* ── Reminders ── */
+    .reminder-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 640px) { .reminder-grid { grid-template-columns: 1fr; } }
+    .reminder-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+    }
+    .reminder-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 18px; }
+    .reminder-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+    .reminder-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+    .reminder-item.inactive { opacity: 0.5; }
+    .reminder-time { font-weight: 700; font-size: 1rem; }
+    .reminder-label { font-size: 0.8rem; color: var(--text-muted); }
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; cursor: pointer; inset: 0;
+      background: var(--border); border-radius: 99px;
+      transition: 0.2s;
+    }
+    .toggle-slider:before {
+      content: ''; position: absolute;
+      width: 16px; height: 16px;
+      left: 3px; bottom: 3px;
+      background: #fff; border-radius: 50%;
+      transition: 0.2s;
+    }
+    .toggle-switch input:checked + .toggle-slider { background: var(--accent); }
+    .toggle-switch input:checked + .toggle-slider:before { transform: translateX(18px); }
+
+    .notif-status {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+    }
+    .notif-status.granted  { background: rgba(34,197,94,0.1);  border-color: rgba(34,197,94,0.3);  color: var(--normal); }
+    .notif-status.denied   { background: rgba(239,68,68,0.1);  border-color: rgba(239,68,68,0.3);  color: var(--stage2); }
+    .notif-status.default_ { background: rgba(79,142,247,0.1); border-color: rgba(79,142,247,0.3); color: var(--accent); }
+
+    /* ── Export bar ── */
+    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+    .filter-wrap { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-muted); }
+    .filter-wrap select {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 7px 11px; font-size: 0.85rem; outline: none;
+    }
+
+    /* ── Toast ── */
+    #toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 10px; z-index: 9999; }
+    .toast {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 18px;
+      font-size: 0.875rem;
+      box-shadow: var(--shadow);
+      animation: slideIn 0.25s ease;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .toast.success { border-left: 3px solid var(--normal); }
+    .toast.error   { border-left: 3px solid var(--stage2); }
+    .toast.info    { border-left: 3px solid var(--accent); }
+    @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes slideOut { from { opacity: 1; } to { opacity: 0; transform: translateX(40px); } }
+
+    /* ── Responsive ── */
+    @media (max-width: 700px) {
+      header { padding: 0 14px; }
+      .tab-btn { padding: 7px 10px; font-size: 0.82rem; }
+      main { padding: 18px 14px; }
+      .form-row { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) {
+      .logo span { display: none; }
+      nav { gap: 2px; }
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+    </svg>
+    <span>BP Tracker</span>
+  </div>
+  <nav>
+    <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+    <button class="tab-btn" data-tab="add">+ Add</button>
+    <button class="tab-btn" data-tab="history">History</button>
+    <button class="tab-btn" data-tab="reminders">Reminders</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ── Dashboard ── -->
+  <div id="tab-dashboard" class="tab-panel active">
+    <div class="section-header">
+      <h2>Overview</h2>
+      <span id="last-reading-time" style="font-size:0.85rem;color:var(--text-muted)"></span>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="label">Latest Systolic</div>
+        <div class="value" id="stat-sys">—</div>
+        <div class="sub">mmHg</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Latest Diastolic</div>
+        <div class="value" id="stat-dia">—</div>
+        <div class="sub">mmHg</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Latest Pulse</div>
+        <div class="value" id="stat-pulse">—</div>
+        <div class="sub">bpm</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Status</div>
+        <div class="value" id="stat-status" style="font-size:1rem;padding-top:4px">—</div>
+        <div class="sub" id="stat-count">0 readings total</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Avg Systolic (7d)</div>
+        <div class="value" id="stat-avg-sys">—</div>
+        <div class="sub">mmHg</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Avg Diastolic (7d)</div>
+        <div class="value" id="stat-avg-dia">—</div>
+        <div class="sub">mmHg</div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Blood Pressure Trend</h3>
+      <div style="display:flex;gap:18px;margin-bottom:14px;flex-wrap:wrap">
+        <span style="font-size:0.8rem;color:var(--text-muted)">Show last:</span>
+        <label style="font-size:0.8rem;cursor:pointer"><input type="radio" name="chart-range" value="10" checked> Last 10</label>
+        <label style="font-size:0.8rem;cursor:pointer"><input type="radio" name="chart-range" value="20"> Last 20</label>
+        <label style="font-size:0.8rem;cursor:pointer"><input type="radio" name="chart-range" value="50"> Last 50</label>
+        <label style="font-size:0.8rem;cursor:pointer"><input type="radio" name="chart-range" value="all"> All</label>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="bp-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- BP Guide -->
+    <div class="chart-card" style="padding:20px">
+      <h3>Blood Pressure Categories (AHA)</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:12px">
+        <div style="display:flex;align-items:center;gap:10px"><span class="bp-badge bp-normal">Normal</span><span style="font-size:0.82rem;color:var(--text-muted)">&lt;120 / &lt;80</span></div>
+        <div style="display:flex;align-items:center;gap:10px"><span class="bp-badge bp-elevated">Elevated</span><span style="font-size:0.82rem;color:var(--text-muted)">120–129 / &lt;80</span></div>
+        <div style="display:flex;align-items:center;gap:10px"><span class="bp-badge bp-stage1">High Stage 1</span><span style="font-size:0.82rem;color:var(--text-muted)">130–139 / 80–89</span></div>
+        <div style="display:flex;align-items:center;gap:10px"><span class="bp-badge bp-stage2">High Stage 2</span><span style="font-size:0.82rem;color:var(--text-muted)">&ge;140 / &ge;90</span></div>
+        <div style="display:flex;align-items:center;gap:10px"><span class="bp-badge bp-crisis">Crisis</span><span style="font-size:0.82rem;color:var(--text-muted)">&gt;180 / &gt;120</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Add Reading ── -->
+  <div id="tab-add" class="tab-panel">
+    <div class="form-card">
+      <h2>Log a Reading</h2>
+      <form id="reading-form" autocomplete="off">
+        <div class="form-row">
+          <div class="field">
+            <label for="f-sys">Systolic (upper) <span style="color:var(--stage2)">*</span></label>
+            <input type="number" id="f-sys" min="60" max="300" placeholder="e.g. 120" required />
+            <span class="hint">mmHg</span>
+          </div>
+          <div class="field">
+            <label for="f-dia">Diastolic (lower) <span style="color:var(--stage2)">*</span></label>
+            <input type="number" id="f-dia" min="30" max="200" placeholder="e.g. 80" required />
+            <span class="hint">mmHg</span>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="f-pulse">Pulse</label>
+            <input type="number" id="f-pulse" min="30" max="300" placeholder="e.g. 72" />
+            <span class="hint">bpm (optional)</span>
+          </div>
+          <div class="field">
+            <label for="f-arm">Arm</label>
+            <select id="f-arm">
+              <option value="left">Left arm</option>
+              <option value="right">Right arm</option>
+              <option value="wrist">Wrist</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="f-datetime">Date &amp; Time</label>
+          <input type="datetime-local" id="f-datetime" />
+        </div>
+        <div class="field">
+          <label for="f-note">Note</label>
+          <textarea id="f-note" placeholder="e.g. After morning walk, feeling stressed…"></textarea>
+        </div>
+        <div id="live-category"></div>
+        <button type="submit" class="btn btn-primary" style="width:100%">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          Save Reading
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── History ── -->
+  <div id="tab-history" class="tab-panel">
+    <div class="section-header">
+      <h2>Reading History</h2>
+    </div>
+    <div class="toolbar">
+      <div class="filter-wrap">
+        <label for="filter-range">Show:</label>
+        <select id="filter-range">
+          <option value="all">All time</option>
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
+        </select>
+      </div>
+      <div class="filter-wrap">
+        <label for="filter-category">Category:</label>
+        <select id="filter-category">
+          <option value="all">All</option>
+          <option value="normal">Normal</option>
+          <option value="elevated">Elevated</option>
+          <option value="stage1">Stage 1</option>
+          <option value="stage2">Stage 2</option>
+          <option value="crisis">Crisis</option>
+        </select>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" id="export-csv-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export CSV
+        </button>
+        <button class="btn btn-danger btn-sm" id="clear-all-btn">Clear All</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date &amp; Time</th>
+            <th>BP (mmHg)</th>
+            <th>Pulse</th>
+            <th>Arm</th>
+            <th>Category</th>
+            <th>Note</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="readings-tbody"></tbody>
+      </table>
+    </div>
+    <div id="history-empty" class="empty-state" style="display:none">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+        <rect x="9" y="3" width="6" height="4" rx="2"/>
+      </svg>
+      <p>No readings yet</p>
+      <span>Switch to "Add" to log your first blood pressure reading.</span>
+    </div>
+  </div>
+
+  <!-- ── Reminders ── -->
+  <div id="tab-reminders" class="tab-panel">
+    <div class="section-header">
+      <h2>Reminders</h2>
+    </div>
+
+    <div class="reminder-grid">
+      <div class="reminder-card">
+        <h3>Notification Permission</h3>
+        <div id="notif-status" class="notif-status default_">Checking…</div>
+        <button class="btn btn-primary" id="req-notif-btn" style="display:none">Enable Notifications</button>
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-top:12px">
+          Browser notifications are used to remind you to take readings.
+          You can also enable the in-app alarm sound for backup reminders.
+        </p>
+        <div class="field" style="margin-top:16px;margin-bottom:0">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+            <input type="checkbox" id="sound-toggle" style="width:16px;height:16px" />
+            Enable in-app alarm sound
+          </label>
+        </div>
+      </div>
+
+      <div class="reminder-card">
+        <h3>Add Reminder</h3>
+        <div class="field">
+          <label for="r-time">Time</label>
+          <input type="time" id="r-time" />
+        </div>
+        <div class="field" style="margin-bottom:14px">
+          <label for="r-label">Label (optional)</label>
+          <input type="text" id="r-label" placeholder="e.g. Morning reading" maxlength="40" />
+        </div>
+        <button class="btn btn-primary" id="add-reminder-btn">Add Reminder</button>
+      </div>
+    </div>
+
+    <div style="margin-top:24px">
+      <h3 style="font-size:1rem;font-weight:700;margin-bottom:14px">Scheduled Reminders</h3>
+      <div class="reminder-list" id="reminder-list"></div>
+      <div id="reminder-empty" class="empty-state" style="display:none;padding:30px 0">
+        <p>No reminders set</p>
+        <span>Add a time above to get reminded to take your BP.</span>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<div id="toast-container"></div>
+
+<script>
+/* ─────────────────────────────────────────────
+   STATE & STORAGE
+───────────────────────────────────────────── */
+const READINGS_KEY  = 'bp_readings_v1';
+const REMINDERS_KEY = 'bp_reminders_v1';
+const SETTINGS_KEY  = 'bp_settings_v1';
+
+function loadReadings()  { try { return JSON.parse(localStorage.getItem(READINGS_KEY)) || []; } catch { return []; } }
+function saveReadings(r) { localStorage.setItem(READINGS_KEY, JSON.stringify(r)); }
+
+function loadReminders()  { try { return JSON.parse(localStorage.getItem(REMINDERS_KEY)) || []; } catch { return []; } }
+function saveReminders(r) { localStorage.setItem(REMINDERS_KEY, JSON.stringify(r)); }
+
+function loadSettings()  { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch { return {}; } }
+function saveSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
+
+/* ─────────────────────────────────────────────
+   BP CLASSIFICATION
+───────────────────────────────────────────── */
+function classify(sys, dia) {
+  if (sys > 180 || dia > 120)
+    return { label: 'Crisis',      cls: 'bp-crisis',   color: '#fca5a5' };
+  if (sys >= 140 || dia >= 90)
+    return { label: 'High Stage 2', cls: 'bp-stage2',  color: '#ef4444' };
+  if (sys >= 130 || dia >= 80)
+    return { label: 'High Stage 1', cls: 'bp-stage1',  color: '#f97316' };
+  if (sys >= 120 && dia < 80)
+    return { label: 'Elevated',    cls: 'bp-elevated', color: '#f59e0b' };
+  return   { label: 'Normal',      cls: 'bp-normal',   color: '#22c55e' };
+}
+
+/* ─────────────────────────────────────────────
+   TABS
+───────────────────────────────────────────── */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'dashboard')  renderDashboard();
+    if (btn.dataset.tab === 'history')    renderHistory();
+    if (btn.dataset.tab === 'reminders')  renderReminders();
+  });
+});
+
+/* ─────────────────────────────────────────────
+   TOAST
+───────────────────────────────────────────── */
+function toast(msg, type = 'info') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => {
+    t.style.animation = 'slideOut 0.3s ease forwards';
+    setTimeout(() => t.remove(), 300);
+  }, 3000);
+}
+
+/* ─────────────────────────────────────────────
+   CHART
+───────────────────────────────────────────── */
+let bpChart = null;
+
+function buildChartData(readings) {
+  const sorted = [...readings].sort((a, b) => new Date(a.ts) - new Date(b.ts));
+  return {
+    labels:    sorted.map(r => formatShort(r.ts)),
+    systolic:  sorted.map(r => r.sys),
+    diastolic: sorted.map(r => r.dia),
+    pulse:     sorted.map(r => r.pulse ?? null),
+  };
+}
+
+function renderChart(readings) {
+  const rangeValue = document.querySelector('input[name="chart-range"]:checked')?.value ?? '10';
+  let subset = [...readings].sort((a, b) => new Date(a.ts) - new Date(b.ts));
+  if (rangeValue !== 'all') subset = subset.slice(-parseInt(rangeValue));
+
+  const d = buildChartData(subset);
+  const ctx = document.getElementById('bp-chart').getContext('2d');
+
+  if (bpChart) bpChart.destroy();
+
+  bpChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: d.labels,
+      datasets: [
+        {
+          label: 'Systolic',
+          data: d.systolic,
+          borderColor: '#4f8ef7',
+          backgroundColor: 'rgba(79,142,247,0.1)',
+          tension: 0.3,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          fill: false,
+        },
+        {
+          label: 'Diastolic',
+          data: d.diastolic,
+          borderColor: '#a78bfa',
+          backgroundColor: 'rgba(167,139,250,0.1)',
+          tension: 0.3,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          fill: false,
+        },
+        {
+          label: 'Pulse',
+          data: d.pulse,
+          borderColor: '#34d399',
+          borderDash: [4, 4],
+          backgroundColor: 'transparent',
+          tension: 0.3,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          fill: false,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#7a88aa', boxWidth: 12 } },
+        tooltip: {
+          backgroundColor: '#1a1d27',
+          borderColor: '#2e3348',
+          borderWidth: 1,
+          titleColor: '#e8eaf0',
+          bodyColor: '#7a88aa',
+          callbacks: {
+            label: ctx => {
+              if (ctx.parsed.y === null) return null;
+              const unit = ctx.dataset.label === 'Pulse' ? ' bpm' : ' mmHg';
+              return `${ctx.dataset.label}: ${ctx.parsed.y}${unit}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#7a88aa', maxRotation: 45 },
+          grid:  { color: '#2e3348' }
+        },
+        y: {
+          ticks: { color: '#7a88aa' },
+          grid:  { color: '#2e3348' },
+          min: 40,
+        }
+      }
+    }
+  });
+}
+
+document.querySelectorAll('input[name="chart-range"]').forEach(r => {
+  r.addEventListener('change', () => renderChart(loadReadings()));
+});
+
+/* ─────────────────────────────────────────────
+   DASHBOARD
+───────────────────────────────────────────── */
+function renderDashboard() {
+  const readings = loadReadings();
+  renderChart(readings);
+
+  if (readings.length === 0) {
+    ['stat-sys','stat-dia','stat-pulse','stat-status'].forEach(id => document.getElementById(id).textContent = '—');
+    document.getElementById('stat-count').textContent = '0 readings total';
+    document.getElementById('stat-avg-sys').textContent = '—';
+    document.getElementById('stat-avg-dia').textContent = '—';
+    document.getElementById('last-reading-time').textContent = '';
+    return;
+  }
+
+  const sorted = [...readings].sort((a, b) => new Date(b.ts) - new Date(a.ts));
+  const latest = sorted[0];
+  const cat    = classify(latest.sys, latest.dia);
+
+  document.getElementById('stat-sys').textContent   = latest.sys;
+  document.getElementById('stat-dia').textContent   = latest.dia;
+  document.getElementById('stat-pulse').textContent = latest.pulse ?? '—';
+  document.getElementById('stat-count').textContent = `${readings.length} reading${readings.length !== 1 ? 's' : ''} total`;
+  document.getElementById('stat-status').innerHTML  = `<span class="bp-badge ${cat.cls}">${cat.label}</span>`;
+  document.getElementById('last-reading-time').textContent = 'Last: ' + formatFull(latest.ts);
+
+  // 7-day average
+  const cutoff = Date.now() - 7 * 86400000;
+  const recent = readings.filter(r => new Date(r.ts).getTime() >= cutoff);
+  if (recent.length) {
+    const avgSys = Math.round(recent.reduce((s, r) => s + r.sys, 0) / recent.length);
+    const avgDia = Math.round(recent.reduce((s, r) => s + r.dia, 0) / recent.length);
+    document.getElementById('stat-avg-sys').textContent = avgSys;
+    document.getElementById('stat-avg-dia').textContent = avgDia;
+  } else {
+    document.getElementById('stat-avg-sys').textContent = '—';
+    document.getElementById('stat-avg-dia').textContent = '—';
+  }
+}
+
+/* ─────────────────────────────────────────────
+   ADD READING FORM
+───────────────────────────────────────────── */
+// Set default datetime to now
+function setDefaultDatetime() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  const local  = new Date(now - offset).toISOString().slice(0, 16);
+  document.getElementById('f-datetime').value = local;
+}
+setDefaultDatetime();
+
+// Live category preview
+['f-sys','f-dia'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updateLiveCategory);
+});
+
+function updateLiveCategory() {
+  const sys = parseInt(document.getElementById('f-sys').value);
+  const dia = parseInt(document.getElementById('f-dia').value);
+  const el  = document.getElementById('live-category');
+  if (isNaN(sys) || isNaN(dia)) { el.innerHTML = ''; return; }
+  const cat = classify(sys, dia);
+  el.innerHTML = `<span style="font-size:0.85rem;color:var(--text-muted)">Category: </span><span class="bp-badge ${cat.cls}">${cat.label}</span>`;
+}
+
+document.getElementById('reading-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const sys  = parseInt(document.getElementById('f-sys').value);
+  const dia  = parseInt(document.getElementById('f-dia').value);
+  const pls  = document.getElementById('f-pulse').value;
+  const arm  = document.getElementById('f-arm').value;
+  const dt   = document.getElementById('f-datetime').value;
+  const note = document.getElementById('f-note').value.trim();
+
+  if (isNaN(sys) || sys < 60 || sys > 300) { toast('Systolic must be 60–300 mmHg', 'error'); return; }
+  if (isNaN(dia) || dia < 30 || dia > 200) { toast('Diastolic must be 30–200 mmHg', 'error'); return; }
+
+  const reading = {
+    id:    crypto.randomUUID(),
+    ts:    dt ? new Date(dt).toISOString() : new Date().toISOString(),
+    sys,
+    dia,
+    pulse: pls ? parseInt(pls) : null,
+    arm,
+    note,
+  };
+
+  const readings = loadReadings();
+  readings.push(reading);
+  saveReadings(readings);
+
+  const cat = classify(sys, dia);
+  toast(`Reading saved — ${cat.label}`, 'success');
+
+  // Reset form
+  document.getElementById('f-sys').value   = '';
+  document.getElementById('f-dia').value   = '';
+  document.getElementById('f-pulse').value = '';
+  document.getElementById('f-note').value  = '';
+  document.getElementById('live-category').innerHTML = '';
+  setDefaultDatetime();
+
+  // Warn if crisis
+  if (cat.label === 'Crisis') {
+    setTimeout(() => alert('⚠️ Hypertensive Crisis detected!\nSystolic > 180 or Diastolic > 120.\nSeek immediate medical attention if you feel symptoms.'), 100);
+  }
+});
+
+/* ─────────────────────────────────────────────
+   HISTORY
+───────────────────────────────────────────── */
+function renderHistory() {
+  const allReadings     = loadReadings();
+  const rangeFilter     = document.getElementById('filter-range').value;
+  const categoryFilter  = document.getElementById('filter-category').value;
+
+  let filtered = [...allReadings];
+
+  if (rangeFilter !== 'all') {
+    const cutoff = Date.now() - parseInt(rangeFilter) * 86400000;
+    filtered = filtered.filter(r => new Date(r.ts).getTime() >= cutoff);
+  }
+
+  if (categoryFilter !== 'all') {
+    filtered = filtered.filter(r => {
+      const cat = classify(r.sys, r.dia).label.toLowerCase().replace(' ', '');
+      // map label to filter key
+      const map = { 'normal':'normal', 'elevated':'elevated', 'highstage1':'stage1', 'highstage2':'stage2', 'crisis':'crisis' };
+      return map[cat] === categoryFilter;
+    });
+  }
+
+  // Sort newest first
+  filtered.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+
+  const tbody = document.getElementById('readings-tbody');
+  const empty = document.getElementById('history-empty');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const armLabel = { left: 'Left', right: 'Right', wrist: 'Wrist' };
+  tbody.innerHTML = filtered.map(r => {
+    const cat = classify(r.sys, r.dia);
+    return `
+      <tr>
+        <td>${formatFull(r.ts)}</td>
+        <td><strong>${r.sys}/${r.dia}</strong></td>
+        <td>${r.pulse ?? '—'}</td>
+        <td>${armLabel[r.arm] ?? r.arm}</td>
+        <td><span class="bp-badge ${cat.cls}">${cat.label}</span></td>
+        <td><span class="note">${escapeHtml(r.note)}</span></td>
+        <td>
+          <button class="btn btn-ghost btn-sm delete-btn" data-id="${r.id}" title="Delete">✕</button>
+        </td>
+      </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm('Delete this reading?')) return;
+      const readings = loadReadings().filter(r => r.id !== btn.dataset.id);
+      saveReadings(readings);
+      renderHistory();
+      toast('Reading deleted', 'info');
+    });
+  });
+}
+
+document.getElementById('filter-range').addEventListener('change', renderHistory);
+document.getElementById('filter-category').addEventListener('change', renderHistory);
+
+document.getElementById('export-csv-btn').addEventListener('click', () => {
+  const readings = loadReadings();
+  if (!readings.length) { toast('No readings to export', 'error'); return; }
+  const header = 'Date,Time,Systolic,Diastolic,Pulse,Arm,Category,Note';
+  const rows = [...readings]
+    .sort((a, b) => new Date(a.ts) - new Date(b.ts))
+    .map(r => {
+      const d   = new Date(r.ts);
+      const cat = classify(r.sys, r.dia).label;
+      return [
+        d.toLocaleDateString(), d.toLocaleTimeString(),
+        r.sys, r.dia, r.pulse ?? '', r.arm, cat,
+        `"${(r.note || '').replace(/"/g, '""')}"`
+      ].join(',');
+    });
+  const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `bp-readings-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV exported', 'success');
+});
+
+document.getElementById('clear-all-btn').addEventListener('click', () => {
+  if (!confirm('Delete ALL readings? This cannot be undone.')) return;
+  saveReadings([]);
+  renderHistory();
+  toast('All readings cleared', 'info');
+});
+
+/* ─────────────────────────────────────────────
+   REMINDERS
+───────────────────────────────────────────── */
+function renderReminders() {
+  updateNotifStatus();
+  const reminders = loadReminders();
+  const list      = document.getElementById('reminder-list');
+  const empty     = document.getElementById('reminder-empty');
+
+  if (reminders.length === 0) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  list.innerHTML = reminders
+    .sort((a, b) => a.time.localeCompare(b.time))
+    .map(r => `
+      <div class="reminder-item ${r.enabled ? '' : 'inactive'}" data-id="${r.id}">
+        <div>
+          <div class="reminder-time">${formatTime12(r.time)}</div>
+          <div class="reminder-label">${escapeHtml(r.label) || 'Blood pressure reminder'}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <label class="toggle-switch" title="${r.enabled ? 'Disable' : 'Enable'}">
+            <input type="checkbox" class="reminder-toggle" data-id="${r.id}" ${r.enabled ? 'checked' : ''}>
+            <span class="toggle-slider"></span>
+          </label>
+          <button class="btn btn-ghost btn-sm delete-reminder-btn" data-id="${r.id}" title="Delete">✕</button>
+        </div>
+      </div>`).join('');
+
+  list.querySelectorAll('.reminder-toggle').forEach(chk => {
+    chk.addEventListener('change', () => {
+      const reminders = loadReminders();
+      const r = reminders.find(r => r.id === chk.dataset.id);
+      if (r) { r.enabled = chk.checked; saveReminders(reminders); scheduleReminders(); renderReminders(); }
+    });
+  });
+
+  list.querySelectorAll('.delete-reminder-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const reminders = loadReminders().filter(r => r.id !== btn.dataset.id);
+      saveReminders(reminders);
+      scheduleReminders();
+      renderReminders();
+      toast('Reminder deleted', 'info');
+    });
+  });
+}
+
+document.getElementById('add-reminder-btn').addEventListener('click', () => {
+  const time  = document.getElementById('r-time').value;
+  const label = document.getElementById('r-label').value.trim();
+  if (!time) { toast('Please pick a time', 'error'); return; }
+
+  const reminders = loadReminders();
+  if (reminders.some(r => r.time === time)) { toast('A reminder at that time already exists', 'error'); return; }
+  if (reminders.length >= 10) { toast('Maximum 10 reminders allowed', 'error'); return; }
+
+  reminders.push({ id: crypto.randomUUID(), time, label, enabled: true });
+  saveReminders(reminders);
+  scheduleReminders();
+  renderReminders();
+  toast('Reminder added', 'success');
+  document.getElementById('r-time').value  = '';
+  document.getElementById('r-label').value = '';
+});
+
+/* Notification permission */
+function updateNotifStatus() {
+  const el  = document.getElementById('notif-status');
+  const btn = document.getElementById('req-notif-btn');
+  if (!('Notification' in window)) {
+    el.className = 'notif-status denied';
+    el.textContent = 'Notifications not supported in this browser.';
+    btn.style.display = 'none';
+    return;
+  }
+  const perm = Notification.permission;
+  if (perm === 'granted') {
+    el.className = 'notif-status granted';
+    el.textContent = '✓ Notifications are enabled.';
+    btn.style.display = 'none';
+  } else if (perm === 'denied') {
+    el.className = 'notif-status denied';
+    el.textContent = '✗ Notifications are blocked. Please allow them in your browser settings.';
+    btn.style.display = 'none';
+  } else {
+    el.className = 'notif-status default_';
+    el.textContent = 'Notifications are not yet enabled. Click below to allow reminders.';
+    btn.style.display = 'inline-flex';
+  }
+}
+
+document.getElementById('req-notif-btn').addEventListener('click', () => {
+  Notification.requestPermission().then(() => {
+    updateNotifStatus();
+    scheduleReminders();
+  });
+});
+
+/* Sound toggle */
+const settings = loadSettings();
+const soundToggle = document.getElementById('sound-toggle');
+soundToggle.checked = !!settings.sound;
+soundToggle.addEventListener('change', () => {
+  const s = loadSettings(); s.sound = soundToggle.checked; saveSettings(s);
+});
+
+/* Reminder scheduler — checks every 30s */
+let reminderIntervalId = null;
+let lastFiredKey = {};  // prevent double-fire within same minute
+
+function scheduleReminders() {
+  if (reminderIntervalId) clearInterval(reminderIntervalId);
+  reminderIntervalId = setInterval(checkReminders, 30000);
+  checkReminders();
+}
+
+function checkReminders() {
+  const now       = new Date();
+  const hhmm      = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const todayKey  = `${now.toDateString()}_${hhmm}`;
+  const reminders = loadReminders();
+
+  reminders.forEach(r => {
+    if (!r.enabled || r.time !== hhmm) return;
+    const fireKey = `${r.id}_${todayKey}`;
+    if (lastFiredKey[fireKey]) return;
+    lastFiredKey[fireKey] = true;
+
+    const label = r.label || 'Time to take your blood pressure!';
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('BP Tracker', {
+        body: label,
+        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%234f8ef7"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>',
+      });
+    }
+
+    const s = loadSettings();
+    if (s.sound) playBeep();
+    toast(`⏰ Reminder: ${label}`, 'info');
+  });
+}
+
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.3, 0.6].forEach(offset => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + offset);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + offset + 0.25);
+      osc.start(ctx.currentTime + offset);
+      osc.stop(ctx.currentTime + offset + 0.3);
+    });
+  } catch {}
+}
+
+/* ─────────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────────── */
+function formatFull(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function formatShort(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function formatTime12(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  const ampm   = h >= 12 ? 'PM' : 'AM';
+  const h12    = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2,'0')} ${ampm}`;
+}
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ─────────────────────────────────────────────
+   INIT
+───────────────────────────────────────────── */
+renderDashboard();
+scheduleReminders();
+</script>
+</body>
+</html>
